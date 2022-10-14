@@ -1,0 +1,6 @@
+/% Change the game header
+
+%
+@Data 20
+{ 444F5F4E 4F545F50 4C415920 20202020 20202020 } % "DO_NOT_PLAY         "
+%/

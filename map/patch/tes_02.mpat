@@ -1,0 +1,95 @@
+% Credits Map
+
+#new:Function_Init $Function_Init
+{
+	JR        RA
+	ADDIU     V0, R0, 1
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+}
+
+#new:Header $Header
+{
+    [MainScript]  $Script_Main
+    [EntryList]   $EntryList
+    [EntryCount]  1
+    [Background]  00000000
+    [MapTattle]   00000000
+}
+
+#new:Script_Main $Script_Main
+{
+    Call  	DisablePlayerInput    ( .True )
+    Call  	DisablePlayerPhysics  ( .True )
+    Call  	SetPlayerPos  ( 0 -1000` 0 )
+    Wait  1
+	% Init Cam Data
+    Call  	SetSpriteShading  ( -1 )
+	Call    SetCamPerspective 	( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  	SetCamEnabled ( .Cam:Default .True )
+    Call  	SetCamLeadPlayer  ( .Cam:Default .False )
+    Call  	SetCamType    ( .Cam:Default 00000004 .False )
+    Call  	SetCamPitch   ( .Cam:Default 0 0 )
+    Call  	SetCamDistance    ( .Cam:Default 440` )
+    Call  	SetCamPosA    ( .Cam:Default 0 100` )
+    Call  	SetCamPosB    ( .Cam:Default 0 0 )
+    Call  	SetCamPosC    ( .Cam:Default 0 30` ) % Y Pos
+    Call  	SetPanTarget  ( .Cam:Default 0 0 0 )
+    Call  	SetCamSpeed   ( .Cam:Default *Fixed[90.0] )
+    Call  	PanToTarget   ( .Cam:Default 00000000 00000001 )
+    Call    SetCamBGColor     ( .Cam:Default 00000000 00000000 00000000 ) % black
+	Call    SetCamEnabled       ( .Cam:Default .True )
+	Call    SetCamLeadPlayer    ( .Cam:Default .False )
+	Wait  1
+    Thread
+        Wait	25`
+        Call  	ShowMessageAtScreenPos    ( $String_Credits 000000A0 00000028 )
+        Call  	ShowMessageAtScreenPos    ( $String_Credits2 000000A0 00000028 )
+        Call  	ShowMessageAtScreenPos    ( $String_Patrons1 000000A0 00000028 )
+        Call  	ShowMessageAtScreenPos    ( $String_Patrons 000000A0 00000028 )
+        Wait	10`
+        Call    GotoMap ( "tes_01" 1 )
+    EndThread
+    Return
+    End
+}
+
+#string $String_Credits
+{
+[Style Inspect]
+[DelayOff][Right 54][Down 15]Romhack by elDexter
+[Wait][End]
+}
+
+#string $String_Credits2
+{
+[Style Inspect]
+[DelayOff]Inspired by the Doom mod[BR]
+"[SaveColor][Color:01]do_not_play.wad[RestoreColor]" by [SaveColor][Color:07]Raveyard[RestoreColor].
+[Wait][End]
+}
+
+#string $String_Patrons1
+{
+[Style Inspect]
+[DelayOff][Right 97][Down 15]Patrons
+[Wait][End]
+}
+
+#string $String_Patrons
+{
+[Style Inspect][DelayOff]
+[SaveColor][Color:03]Reborn[RestoreColor], [SaveColor][Color:03]Cracker Jack[RestoreColor], [SaveColor][Color:03]Ponderman[RestoreColor],[BR]
+[SaveColor][Color:03]TwoPieRadian[RestoreColor], [SaveColor][Color:03]Tyler Bravenst[RestoreColor],[BR]
+[SaveColor][Color:03]Jdaster64[RestoreColor], [SaveColor][Color:03]Evelyn Horstman[RestoreColor],[BR]
+[SaveColor][Color:03]DiaFiend[RestoreColor], [SaveColor][Color:03]Vedin[RestoreColor], [SaveColor][Color:03]Mishy[RestoreColor]...[BR]
+[Wait][Next]
+[SaveColor][Color:03]orangeisborange[RestoreColor], [SaveColor][Color:03]NEWB[RestoreColor], [SaveColor][Color:03]Zarexel[RestoreColor],[BR]
+[SaveColor][Color:03]Yaaaass[RestoreColor], [SaveColor][Color:03]Team Luxk[RestoreColor], [SaveColor][Color:03]Frequency[RestoreColor],[BR]
+[SaveColor][Color:03]Matt Patt[RestoreColor], 
+[SaveColor][Color:07]Kappy[RestoreColor], [SaveColor][Color:07]Andrea LS[RestoreColor].
+[Wait][End]
+}

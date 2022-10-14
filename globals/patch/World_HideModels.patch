@@ -1,0 +1,17 @@
+% Don't render model when the screamer appears.
+%
+% ~Func:render_frame
+@Hook 8002DD24
+{
+    LABU    V0, $Scream
+    BNE     V0, R0, .End
+    NOP
+    JAL     ~Func:render_models
+    NOP
+    .End
+    J       8002DD2C
+    NOP
+}
+
+#export:Data $Scream % used in `tes_01.mpat`
+{ 00 }

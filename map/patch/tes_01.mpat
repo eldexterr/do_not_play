@@ -1,0 +1,1466 @@
+#define .Npc:Monster 1
+#define .Npc:Screamer 2
+#define .Npc:Clone1 3
+#define .Npc:Clone2 4
+#define .Npc:Clone3 5
+#define .Npc:Light 6
+#define .Npc:PlayerHurt F
+
+#new:Header $Header
+{
+	[MainScript] $Script_Main
+	[Background] 00000000
+	[EntryList] $EntryList
+	[EntryCount] 2
+}
+
+#new:EntryList $EntryList
+{
+	~Vec4f:Entry0
+	~Vec4f:Entry1
+}
+
+#new:Function_Init $Function_Init
+{
+	PUSH    RA
+	LIA     A0, 800B0CF0
+	LIA     A1, "kpa_tex"
+	JAL     800654F0 % sprintf
+	RESERVED
+	CLEAR  V0
+	JPOP   RA
+}
+
+#new:Script_Main $Script_Main
+{
+	Set	  *GB_StoryProgress 7F
+	Call  $WriteAddress ( 8010F290 0 10` 2 .False ) % Mario's HP
+	Call  $RunFunction ( 800E9B6C ) % ~Func:sync_status_menu
+	Call  $WriteAddress ( $Scream 0 .False .False .False )
+	Set   *GB_WorldLocation  .Location:BoosMansion
+	Call  SetSpriteShading   ( .Shading:tik_01 )
+	Call  SetCamPerspective  ( .Cam:Default 00000003 00000019 00000010 00001000 )
+	Call  SetCamBGColor      ( .Cam:Default 00000000 00000000 00000000 )
+	Call  SetCamEnabled      ( .Cam:Default .True )
+	Call  SetCamLeadPlayer   ( .Cam:Default .False )
+	Exec  $Script_SetupMusic
+	Call  $Function_SetupFog
+	Exec  $Script_EnterMap
+    Bind  $Script_ToogleCollisions_Left .Trigger:FloorAbove ~Collider:showLeftSide 00000001 00000000 
+    Bind  $Script_ToogleCollisions_Left .Trigger:FloorAbove ~Collider:showLeftSide2 00000001 00000000 
+	Bind  $Script_ToogleCollisions_Left .Trigger:FloorAbove ~Collider:showLeftSide3 00000001 00000000 
+	Bind  $Script_ToogleCollisions_Left .Trigger:FloorAbove ~Collider:showLeftSide4 00000001 00000000 
+	Bind  $Script_ToogleCollisions_Left .Trigger:FloorAbove ~Collider:showLeftSide5 00000001 00000000 
+    Bind  $Script_ToogleCollisions_Right .Trigger:FloorAbove ~Collider:showRightSide 00000001 00000000 
+	Bind  $Script_ToogleCollisions_Right .Trigger:FloorAbove ~Collider:showRightSide2 00000001 00000000 
+	Bind  $Script_ToogleCollisions_Right .Trigger:FloorAbove ~Collider:showRightSide3 00000001 00000000 
+    Bind  $Script_ToogleCollisions_BottomLeft .Trigger:FloorAbove ~Collider:showBottomLeft 00000001 00000000 
+	Bind  $Script_ToogleCollisions_BottomLeft .Trigger:FloorAbove ~Collider:showBottomLeft2 00000001 00000000
+	Bind  $Script_ToogleCollisions_BottomLeft .Trigger:FloorAbove ~Collider:showBottomLeft3 00000001 00000000
+	Bind  $Script_ToogleCollisions_BottomLeft .Trigger:FloorAbove ~Collider:showBottomLeft4 00000001 00000000
+    Call  ModifyColliderFlags 	( .False ~Collider:rightSide 7FFFFE00 )
+    Call  ModifyColliderFlags 	( .False ~Collider:bottomLeft 7FFFFE00 )
+	Call  GetEntryID ( *Var0 )
+	If *Var0 == ~Entry:Entry0 % Title screen.
+		Call  	DisablePlayerInput    ( .True )
+		Call  	DisablePlayerPhysics  ( .True )
+		Call  	SetPlayerPos  ( 0 -1000` 0 )
+		Wait  	1
+		Exec	$Script_StartGame
+	Else
+		Call  MakeNpcs ( 0 $NpcGroupList_tes01 )
+		Exec  $Script_TrackPlayerFallingOutOfBounds
+	EndIf
+	Exec  $Script_TrackPlayerHP
+	Return
+	End
+}
+
+#new:Script $Script_StartGame
+{
+	% wait for the A button to be pressed.
+	Loop
+		Call $ReadBitFlag ( 80074034 .False 2 7 *Var0 )
+		If *Var0 == .True
+			Call	PlaySound ( 00C9 )
+			Call    GotoMap ( "tes_01" 1 )
+			BreakLoop
+		EndIf
+		Wait 1
+	EndLoop
+	Return
+	End
+}
+
+#new:Script $Script_ToogleCollisions_Left
+{
+    Call     ModifyColliderFlags 	( .True ~Collider:leftSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .False ~Collider:rightSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .False ~Collider:bottomLeft 7FFFFE00 )
+    Return
+    End
+}
+
+#new:Script $Script_ToogleCollisions_Right
+{
+    Call     ModifyColliderFlags 	( .False ~Collider:leftSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .True ~Collider:rightSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .False ~Collider:bottomLeft 7FFFFE00 )
+    Return
+    End
+}
+
+#new:Script $Script_ToogleCollisions_BottomLeft
+{
+    Call     ModifyColliderFlags 	( .False ~Collider:leftSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .False ~Collider:rightSide 7FFFFE00 )
+    Call     ModifyColliderFlags 	( .True ~Collider:bottomLeft 7FFFFE00 )
+    Return
+    End
+}
+
+% Make sure the player don't fall out of bounds
+#new:Script $Script_TrackPlayerFallingOutOfBounds
+{
+	Loop
+		Call	GetPlayerPos ( *Var0 *Var1 *Var2 )
+		Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var2 .False -1 .False *Var3 .False )
+		If *Var3 == -1 % Put Mario inside the map once again.
+			% Up
+			Set 	*Var4 *Var2 % z
+			Sub		*Var4 45`
+			Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var4 .False -1 .False *Var3 .False )
+			If *Var3 != -1
+				Call	SetPlayerPos ( *Var0 *Var1 *Var4 )
+			EndIf
+			% Down
+			Set 	*Var4 *Var2 % z
+			Add		*Var4 45`
+			Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var4 .False -1 .False *Var3 .False )
+			If *Var3 != -1
+				Call	SetPlayerPos ( *Var0 *Var1 *Var4 )
+			EndIf
+			% Right
+			Set 	*Var4 *Var0 % x
+			Add		*Var4 45`
+			Call	$Function_CheckRaycast ( 00000000 *Var4 *Var1 *Var2 .False -1 .False *Var3 .False )
+			If *Var3 != -1
+				Call	SetPlayerPos ( *Var4 *Var1 *Var2 )
+			EndIf
+			% Left
+			Set 	*Var4 *Var0 % x
+			Sub		*Var4 45`
+			Call	$Function_CheckRaycast ( 00000000 *Var4 *Var1 *Var2 .False -1 .False *Var3 .False )
+			If *Var3 != -1
+				Call	SetPlayerPos ( *Var4 *Var1 *Var2 )
+			EndIf
+		EndIf
+		Wait	1
+	EndLoop
+	Return
+	End
+}
+
+% Track the player HP to trigger a game over.
+#new:Script $Script_TrackPlayerHP
+{
+	Loop
+		% Only kill mario until the player is able to move
+		%
+		% Check if the player have the inputs locked
+		Call $ReadBitFlag ( 8010EFCA .False .False 5 *Var0 ) % check DisablePlayerInputs flag
+		If  *Var0 == .False
+			Call    $ReadAddress ( 8010F292 0 *Var0 .False .False ) % check HP
+			% *Var0 = Mario's Current HP
+			If  *Var0 == .False % dead
+				Call    DisablePlayerInput ( .True )
+				Loop % wait for player
+					Call	GetPlayerActionState ( *Var0 )
+					If *Var0 == .ActionState:Idle
+						BreakLoop
+					EndIf
+					Wait	1
+				EndLoop
+				Exec 	$Script_HideAllEnemies
+				Call	SetPlayerAnimation ( 00010018 )
+				Wait    30`
+				Exec	$Script_Screamer
+				BreakLoop
+			EndIf
+		EndIf
+		Wait    1
+	EndLoop
+	Return
+	End
+}
+
+#new:Script $Script_Screamer
+{
+	SetGroup 0
+	Call	ResetCam ( .Cam:Default 1000` )
+	Call	WaitForCam ( .Cam:Default *Fixed[1.0] )
+	SuspendAll 2
+	Exec 	$Script_HideAllEnemies
+	% hide all models
+	Call    $WriteAddress ( $Scream 0 .True .False .False )
+	Call	GetCamPosition ( .Cam:Default *Var0 *Var1 *Var2 )
+	Add		*Var1 30` % y
+	Add		*Var2 175` % z
+	Call	SetNpcPos ( .Npc:Screamer *Var0 *Var1 *Var2 )
+	Call	PlaySound ( .Sound:BowSpook )
+	Wait	20`
+	Call    GotoMap ( "tes_01" 1 )
+	Return
+	End
+}
+
+#new:Script $Script_SetupMusic
+{
+	Call  FadeOutMusic  ( 00000000 500` ) % usually between 500-1000
+	Call  ClearAmbientSounds ( 250` )
+	Return
+	End
+}
+
+#new:Function $Function_SetupFog
+{
+	PUSH RA
+	JAL       8011BB50
+	NOP
+	ADDIU     A0, R0, 37A
+	JAL       8011BB74
+	ADDIU     A1, R0, 3E8
+	ADDIU     A0, R0, A
+	ADDIU     A1, R0, A
+	ADDIU     A2, R0, A
+	JAL       8011BB88
+	ADDIU     A3, R0, FF
+	ADDIU     V0, R0, 2
+	JPOP RA
+}
+
+#new:Script $Script_EnterMap
+{
+	Return
+	End
+}
+
+#new:Script $Script_CreateExitTriggers
+{
+	Return
+	End
+}
+
+% NPC code
+
+#new:NpcGroupList $NpcGroupList_tes01
+{
+00000001 $NpcGroup_Monster 			00000000
+00000001 $NpcGroup_Screamer 		00000000
+00000003 $NpcGroup_Clones 			00000000
+00000001 $NpcGroup_Light 			00000000
+00000001 $NpcGroup_PlayerHurt 		00000000
+00000000 00000000 00000000 
+}
+
+#new:NpcGroup $NpcGroup_Monster
+{
+.Npc:Monster $NpcSettings_Monster ~vec3f:NPC_Face2
+00002001 $NpcScript_Init_Monster 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus ~NoMovement
+~AnimationTable:NPC_Face
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_Screamer
+{
+.Npc:Screamer $NpcSettings_null ~vec3f:NPC_Mario
+00000020 00000000 00000000 00000000 0000010E
+~NoItems ~NoHP ~NoFP ~NoCoinBonus ~NoMovement
+~AnimationTable:NPC_Face2
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_Clones
+{
+.Npc:Clone1 $NpcSettings_Mario ~vec3f:NPC_Mario
+00002001 $NpcScript_Init_Clone 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus
+~Movement:NPC_Mario
+~AnimationTable:NPC_Mario
+00000000 00000000 00000000 00000000
+%
+.Npc:Clone2 $NpcSettings_Mario ~vec3f:NPC_Mario
+00002001 $NpcScript_Init_Clone 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus
+~Movement:NPC_Mario
+~AnimationTable:NPC_Mario
+00000000 00000000 00000000 00000000
+%
+.Npc:Clone3 $NpcSettings_Mario ~vec3f:NPC_Mario
+00002001 $NpcScript_Init_Clone 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus
+~Movement:NPC_Mario
+~AnimationTable:NPC_Mario
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_PlayerHurt
+{
+.Npc:PlayerHurt $NpcSettings_null ~vec3f:NPC_Hurt
+00200020 $NpcScript_Init_PlayerHurt 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus ~NoMovement
+~AnimationTable:NPC_Hurt
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcGroup $NpcGroup_Light
+{
+.Npc:Light $NpcSettings_Light ~vec3f:NPC_Sparkle
+00000001 $NpcScript_Init_Light 00000000 00000000 0000010E 
+~NoItems ~NoHP ~NoFP ~NoCoinBonus ~NoMovement
+~AnimationTable:NPC_Sparkle
+00000000 00000000 00000000 00000000
+}
+
+#new:NpcSettings $NpcSettings_Monster
+{
+00000000 00450025 00000000 00000000 $Script_NpcAI_Monster 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:NpcSettings $NpcSettings_Mario
+{
+00000000 00240017 00000000 00000000 00000000 80077F70 00000000 8007809C 
+00000000 00000000 000C0000 
+}
+
+#new:NpcSettings $NpcSettings_null
+{
+00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:NpcSettings $NpcSettings_Light
+{
+00000000 001F0010 00000000 00000000 00000000 00000000 00000000 00000000
+00000000 00000000 00630000 
+}
+
+#new:AISettings $AISettings_Monster % unused
+{
+    1.5 % move speed
+    120` % move time
+    30` % wait time
+   85.0 % alert radius
+   65.0
+    5`
+    3.5 % chase speed
+    90`
+    12`
+  110.0 % chase radius
+   90.0
+    3`
+}
+
+#new:AISettings $AISettings_Clone
+{
+    0.8 % move speed
+    40` % move time
+    15` % wait time
+  150.0 % alert radius
+    0.0
+    2`
+    2.3 % chase speed
+    70`
+    1`
+  180.0 % chase radius
+    0.0
+    1`
+}
+
+#new:Script $NpcScript_Init_Clone
+{
+	Call	SetNpcFlagBits ( .Npc:Self 00000200 .False ) % Disable gravity
+	Call	SetNpcFlagBits ( .Npc:Self 00000100 .True ) % ignore player and NPCs collisions
+	Call	EnableNpcAI ( .Npc:Self .False )
+	Call	BindNpcAI ( .Npc:Self $Script_NpcAI_Clone )
+	% disable detection data
+	Call	GetSelfNpcID ( *Var3 )
+	Call	GetNpcPointer ( *Var3 *Var4 )
+	Sub		*Var4 100 % read NPC's data from NpcGroupData
+	Call 	$ReadAddress ( *Var4 2 *Var4 D0 .False ) % movementData
+	% update detection data
+	Call 	$WriteAddress ( *Var4 2 1 28 .False ) % detection volume - sizeX
+	Call 	$WriteAddress ( *Var4 2 1 2C .False ) % detection volume - sizeZ
+	Set		*Var0 2 % amount to deal
+	Exec	$Script_EnableNPCHitBox
+	Return
+	End
+}
+
+#new:Script $Script_NpcAI_Clone
+{
+	Call	DoBasicAI ( $AISettings_Clone )
+	Return
+	End
+}
+
+#new:Script $NpcScript_Init_Monster
+{
+	%Set		*MapVar[0] 2 % move down
+	% Set spawn pos
+	Call	RandInt ( 6 *Var0 )
+	Switch *Var0
+		Case == 0
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face1 )
+			Set		*Var1 1 % move horizontally
+		Case == 1
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face2 )
+			Set		*Var1 1
+		Case == 2
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face3 )
+			Set		*Var1 0 % move vertically
+		Case == 3
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face4 )
+			Set		*Var1 1
+		Case == 4
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face5 )
+			Set		*Var1 0
+		Case == 5
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face6 )
+			Set		*Var1 0
+		Case == 6
+			Call	SetNpcPos ( .Npc:Self ~Vec3d:SpawnPos_Face7 )
+			Set		*Var1 0
+	EndSwitch
+	Call	RandInt ( 1 *Var0 )
+	If *Var1 == 0 % Vertical
+		If *Var0 == 0
+			Set *MapVar[0] 0 % move up
+		Else
+			Set *MapVar[0] 2 % move down
+		EndIf
+	Else
+		If *Var0 == 0
+			Set *MapVar[0] 1 % move right
+		Else
+			Set *MapVar[0] 3 % move left
+		EndIf
+	EndIf%/
+	Return
+	End
+}
+
+#new:Script $Script_NpcAI_Monster
+{
+	Call	SetNpcFlagBits ( .Npc:Self 00000000 .False )
+	Call	SetNpcFlagBits ( .Npc:Self 00008A40 .True ) % enable gravity, and remove dust FX while moving.
+	Set		*Var0 7 % amount to deal
+	Exec	$Script_EnableNPCHitBox
+	% get npc size
+	Call	GetSelfNpcID ( *Var0 )
+	Call	GetNpcPointer ( *Var0 *Var0 )
+	Call 	$ReadAddress ( *Var0 1 *Var8 A6 .False ) % sizeX
+	Div		*Var8 2
+	Call 	$ReadAddress ( *Var0 1 *Var9 A8 .False ) % sizeY
+	Exec	$Script_ToggleMonsterDirections
+	Exec	$Script_SpawnEnemies
+	Exec	$Script_WarningSFX
+	Exec	$Script_Cealing
+	Exec	$Script_MonsterFOV
+	Exec	$Script_TrackAI
+	SetTimescale *Fixed[5.5] % monster speed (wandering)
+	Loop
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Switch	*MapVar[0]
+			Case == 0 % Move up
+				Set *Var4 *Var2
+				Sub *Var4 *Var8
+				Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var4 .False -1 .False *Var3 *Var5 )
+				If *Var3 != -1
+					Sub *Var2 1 % z
+				Else
+					Set *MapVar[0] 2 % move down
+					Add *Var2 1 % z
+				EndIf
+			Case == 1 % Move right
+				Set *Var4 *Var0
+				Add *Var4 *Var8
+				Call	$Function_CheckRaycast ( 00000000 *Var4 *Var1 *Var2 .False -1 .False *Var3 *Var5 )
+				If *Var3 != -1
+					Add *Var0 1 % x
+				Else
+					Set *MapVar[0] 3 % move left
+					Sub *Var0 1 % x
+				EndIf
+			Case == 2 % Move down
+				Set *Var4 *Var2
+				Add *Var4 *Var8
+				Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var4 .False -1 .False *Var3 *Var5 )
+				If *Var3 != -1
+					Add *Var2 1 % z
+				Else
+					Set *MapVar[0] 0 % move up
+					Sub *Var2 1 % z
+				EndIf
+			Case == 3 % Move left
+				Set *Var4 *Var0
+				Sub *Var4 *Var8
+				Call	$Function_CheckRaycast ( 00000000 *Var4 *Var1 *Var2 .False -1 .False *Var3 *Var5 )
+				If *Var3 != -1
+					Sub *Var0 1 % x
+				Else
+					Set *MapVar[0] 1 % move right
+					Add *Var0 1 % x
+				EndIf
+		EndSwitch
+		Call	SetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Wait	1
+	EndLoop
+	Return
+	End
+}
+
+% Hurt the player if he touches the enemy.
+%
+% Var0=Damage to deal when touching the player.
+#new:Script $Script_EnableNPCHitBox
+{
+	Set 	*VarD *Var0
+	% get npc size
+	Call	GetSelfNpcID ( *Var0 )
+	Call	GetNpcPointer ( *Var0 *Var0 )
+	Call 	$ReadAddress ( *Var0 1 *Var8 A6 .False ) % sizeX
+	%
+	Loop
+		Call	GetNpcPos ( .Npc:Self *Var3 *Var0 *Var4 )
+		If *Var0 >= 0 % y
+			Call	IsPlayerWithin ( *Var3 *Var4 *Var8 *Var0 )
+			If *Var0 == .True
+				% check if player inputs aren't locked
+				Call 	$ReadBitFlag ( 8010EFC8 .False 2 5 *Var1 ) % DisablePLayerInputs
+				If *Var1 == .False
+					Call	DisablePlayerInput ( .True )
+					Call	DisablePlayerPhysics ( .True )
+					% hide clone
+					Call	GetSelfNpcID ( *Var3 )
+					Switch *Var3
+						CaseOR == .Npc:Clone1
+						CaseOR == .Npc:Clone2
+						CaseOR == .Npc:Clone3
+							Call	SetNpcFlagBits ( *Var3 00000200 .False ) % Disable gravity
+							% disable detection data
+							Call	GetNpcPointer ( *Var3 *Var4 )
+							Sub		*Var4 100 % read NPC's data from NpcGroupData
+							Call 	$ReadAddress ( *Var4 2 *Var4 D0 .False ) % movementData
+							% update detection data
+							Call 	$WriteAddress ( *Var4 2 1 28 .False ) % detection volume - sizeX
+							Call 	$WriteAddress ( *Var4 2 1 2C .False ) % detection volume - sizeZ
+							Call	EnableNpcAI ( *Var3 .False )
+							Call	SetNpcPos ( *Var3 0 -1000` 0 )
+						EndCaseGroup
+					EndSwitch
+					Call	SetNpcVar ( .Npc:PlayerHurt 0 .True )
+					Call	SetNpcFlagBits ( .Npc:PlayerHurt 00000200 .True ) % enable gravity
+					% Stick player pos to the hurt NPC
+					ChildThread
+						Loop
+							Call	GetNpcPos ( .Npc:PlayerHurt *Var0 *Var1 *Var2 )
+							Call	SetPlayerPos ( *Var0 *Var1 *Var2 )
+							% update camera
+							Call    GetPlayerPos 		( *Var0 *Var1 *Var2 )
+							Call    UseSettingsFrom 	( .Cam:Default *Var0 *Var1 *Var2 )
+							Call    SetCamSpeed 	( .Cam:Default *Fixed[10.0] )
+							Call    SetCamDistance  ( .Cam:Default 300` )
+							Call    SetPanTarget 	( .Cam:Default *Var0 *Var1 *Var2 )	% CamID X Y Z
+							Call    PanToTarget 	( .Cam:Default 00000000 00000001 )
+							Call	GetNpcVar ( .Npc:PlayerHurt 0 *Var3 )
+							If *Var3 == .False
+								BreakLoop
+							EndIf
+							Wait	1
+						EndLoop
+					EndChildThread
+					Call	SetPlayerActionState ( .ActionState:EnemyFirstStrike )
+					% hurt player
+					Call 	$ReadAddress ( 8010F290 0 *Var1 2 .False ) % get player HP
+					Sub		*Var1 *VarD
+					If *Var1 < 0
+						Set *Var1 0
+					EndIf
+					Call 	$WriteAddress ( 8010F290 0 *Var1 2 .False ) % update HP
+					% hurt FX
+					Call    PlaySound ( 00E1 ) % taking damage
+					Call    GetPlayerPos  ( *Var0 *Var1 *Var2 )
+					Add     *Var1 13` % y
+					Call    PlayEffect   ( ~FX:Firework:White *Var0 *Var1 *Var2 *Fixed[0.7] .False .False .False .False .False .False .False .False )
+					% knock player
+					Call	GetPlayerPos ( *Var0 *Var1 *Var2 )
+					Call	GetPlayerPos ( *VarA *VarB *VarC )
+					Call	SetNpcPos ( .Npc:PlayerHurt *Var0 *Var1 *Var2 )
+					Call 	$ReadAddressFloat ( 8010F070 2 *Var3 .False .False ) % player rotation
+					Call 	$ReadAddress ( 8010F06C 0 *Var4 .False .False )
+					If *Var4 == .True % player is facing backwards
+						Set *Var4 2
+					Else
+						Switch *Var3
+							Case <= *Fixed[80.0] % looking to the left
+								Set *Var4 0
+							Case >= *Fixed[260.0] % looking to the left
+								Set *Var4 0
+							Case == 0 % looking to the left
+								Set *Var4 0
+							Default % looking to the right
+								Set *Var4 1
+						EndSwitch
+					EndIf
+					Switch *Var4
+						Case == 0 % Looking to the left
+							Sub *Var0 25` % x
+						Case == 1 % Looking to the right
+							Add *Var0 25` % x
+						Case == 2 % Looking backwards
+							Add *Var2 25` % z
+					EndSwitch
+					Call	SetNpcJumpscale ( .Npc:PlayerHurt *Fixed[1.0] )
+					Call	NpcJump0 ( .Npc:PlayerHurt *Var0 .False *Var2 7 )
+					% 2nd knockback
+					Switch *Var4
+						Case == 0 % Looking to the left
+							Sub *Var0 10` % x
+						Case == 1 % Looking to the right
+							Add *Var0 10` % x
+						Case == 2 % Looking backwards
+							Add *Var2 10` % z
+					EndSwitch
+					Call	NpcJump0 ( .Npc:PlayerHurt *Var0 .False *Var2 4 )
+					% check if npc didn't got out of bounds
+					Call	GetNpcPos ( .Npc:PlayerHurt *Var0 *Var1 *Var2 )
+					Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var2 0 -1 0 *Var3 .False )
+					If *Var3 == -1
+						Call	SetNpcPos ( .Npc:PlayerHurt *VarA *VarB *VarC )
+					EndIf
+					Call	SetNpcVar ( .Npc:PlayerHurt 0 .False )
+					Call	SetNpcFlagBits ( .Npc:PlayerHurt 00000200 .False ) % disable gravity
+					Call    ResetCam ( .Cam:Default 1000` )
+					Call	SetPlayerActionState ( .ActionState:Idle )
+					Call	DisablePlayerInput ( .False )
+					Call	DisablePlayerPhysics ( .False )
+				EndIf
+			EndIf
+		EndIf
+		Wait	1
+	EndLoop
+	Return
+	End
+}
+
+% Change the direction the monster moves if he is on top of an intersection.
+#new:Script $Script_ToggleMonsterDirections
+{
+	Set 	*VarA .False
+	Label	Start
+	Loop
+		If *MapVar[1] == .False
+			Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+			Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var2 .False -1 .False *Var3 *Var5 )
+			If *Var3 != -1
+				% check if monster already changed direction but it's still in the same collision
+				If *Var3 != *VarA
+					Set 	*VarA .False
+					Call 	$GetColliderData ( *Var3 *Var4 )
+					Call 	$ReadAddress ( *Var4 2 *Var4 .False .False ) % get collider flags
+					If *Var4 & 0F000000 % this collider is an intersection.
+						% Wait until the monster is in the center of the collision
+						Call GetColliderCenter ( *Var3 )
+						Set *Var9 .False
+						Switch *MapVar[0]
+							CaseOR == 0 % Up
+							CaseOR == 2 % Down
+								Call	GetNpcPos ( .Npc:Self .False .False *Var8 )
+								Set *Var6 *Var2
+								Set *Var7 *Var2
+								Add *Var6 15`
+								Sub *Var7 15`
+								If *Var2 > *Var8 % Coming upwards
+									If *Var8 > *Var7
+										Set *Var9 .True
+									EndIf
+								Else % Coming downwards
+									If *Var8 < *Var6
+										Set *Var9 .True
+									EndIf
+								EndIf
+							EndCaseGroup
+							CaseOR == 1 % Right					
+							CaseOR == 3 % Left
+								Call	GetNpcPos ( .Npc:Self *Var8 .False .False )
+								Set *Var6 *Var0
+								Set *Var7 *Var0
+								Add *Var6 15`
+								Sub *Var7 15`
+								If *Var0 > *Var8 % Coming from the left
+									If *Var8 > *Var7
+										Set *Var9 .True
+									EndIf
+								Else % Coming from the right
+									If *Var8 < *Var6
+										Set *Var9 .True
+									EndIf
+								EndIf
+							EndCaseGroup
+						EndSwitch
+						If *Var9 == .True
+							Call	$Function_UpdateMonsterDirection ( *Var4 )
+							Set 	*VarA *Var3
+						EndIf
+					EndIf
+				EndIf
+			EndIf
+		EndIf
+		Wait	1
+	EndLoop
+	Return
+	End
+}
+
+#new:Script $Script_WarningSFX
+{
+	Loop
+		Call	GetPlayerPos ( *Var1 *Var2 *Var3 )
+		Call	GetNpcPos ( .Npc:Self *Var4 *Var5 *Var6 )
+		Call	$GetDist3D ( *Var0 *Var1 *Var2 *Var3 *Var4 *Var5 *Var6 )
+		Switch *Var0 % adjust volume
+			Case >= 2000`
+				Set *Var7 .False
+				Set *Var8 10`
+			Case > 1800`
+				Set *Var7 10`
+				Set *Var8 10`
+			Case > 1600`
+				Set *Var7 20`
+				Set *Var8 10`
+			Case > 1400`
+				Set *Var7 30`
+				Set *Var8 9
+			Case > 1200`
+				Set *Var7 40`
+				Set *Var8 8
+			Case > 1000`
+				Set *Var7 50`
+				Set *Var8 7
+			Case > 800`
+				Set *Var7 60`
+				Set *Var8 6
+			Case > 600`
+				Set *Var7 70`
+				Set *Var8 5
+			Case > 400`
+				Set *Var7 80`
+				Set *Var8 4
+			Case > 200`
+				Set *Var7 90`
+				Set *Var8 3
+			Case > 0
+				Set *Var7 100`
+				Set *Var8 2
+		EndSwitch
+		If *Var7 > .False
+			Call	PlaySoundWithVolume ( 0057 *Var7 )
+		EndIf
+		Wait	*Var8
+	EndLoop
+	Return
+	End
+}
+
+#new:Script $Script_Cealing
+{
+	WaitSeconds 150` % wait 2m30s
+	ChildThread % sound fx
+		Loop
+			Call	PlaySound ( 002D )
+			Wait	10`
+		EndLoop
+	EndChildThread
+	Call    MakeLerp    	( 0 -153` 400` .Easing:QuadraticIn )
+        Loop
+            Call     UpdateLerp
+            Call     TranslateModel ( ~Model:ceiling 0 *Var0 0 )
+            Wait     1
+            If  *Var1  ==  .False
+                Call    TranslateGroup ( *Var4 0 -153` 0 )
+				Call  	$WriteAddress ( 8010F290 0 .False 2 .False ) % kill Mario
+				Call  	$RunFunction ( 800E9B6C ) % ~Func:sync_status_menu
+                BreakLoop
+            EndIf
+        EndLoop
+	Return
+	End
+}
+
+% Move towards the player if the player is in the Monster's field of view
+#new:Script $Script_MonsterFOV
+{
+	Set *Var9 .False
+	Set *VarA .False
+	Loop
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var2 .False -1 .False *Var3 .False )
+		Call 	$ReadAddress ( 8015A552 1 *Var4 0 .False ) % collision Mario is standing on.
+		Call 	$ReadAddress ( 8015A552 1 *Var5 2 .False ) % collision Mario jumped from.
+		If *Var3 != -1
+			If *Var3 == *Var4
+				Set *Var9 .True
+				Exec $Script_MoveTowardsPlayer
+			Else
+				If *Var3 == *Var5
+					Set *Var9 .True
+					Exec $Script_MoveTowardsPlayer
+				EndIf
+			EndIf
+		EndIf
+		% Check if player is close to the Monster's collision
+		%
+		% Right
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Set		*Var6 *Var0
+		Add		*Var6 80`
+		Call	$Function_CheckRaycast ( 00000000 *Var6 *Var1 *Var2 .False -1 .False *Var3 .False )
+		If *Var3 != -1
+			If *Var3 == *Var4
+				Set *Var9 .True
+				Exec $Script_MoveTowardsPlayer
+			Else
+				If *Var3 == *Var5
+					Set *Var9 .True
+					Exec $Script_MoveTowardsPlayer
+				EndIf
+			EndIf
+		EndIf
+		% Left
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Set		*Var6 *Var0
+		Sub		*Var6 80`
+		Call	$Function_CheckRaycast ( 00000000 *Var6 *Var1 *Var2 .False -1 .False *Var3 .False )
+		If *Var3 != -1
+			If *Var3 == *Var4
+				Set *Var9 .True
+				Exec $Script_MoveTowardsPlayer
+			Else
+				If *Var3 == *Var5
+					Set *Var9 .True
+					Exec $Script_MoveTowardsPlayer
+				EndIf
+			EndIf
+		EndIf
+		% Up
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Set		*Var6 *Var2
+		Sub		*Var6 80`
+		Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var6 .False -1 .False *Var3 .False )
+		If *Var3 != -1
+			If *Var3 == *Var4
+				Set *Var9 .True
+				Exec $Script_MoveTowardsPlayer
+			Else
+				If *Var3 == *Var5
+					Set *Var9 .True
+					Exec $Script_MoveTowardsPlayer
+				EndIf
+			EndIf
+		EndIf
+		% Down
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		Set		*Var6 *Var2
+		Add		*Var6 80`
+		Call	$Function_CheckRaycast ( 00000000 *Var0 *Var1 *Var6 .False -1 .False *Var3 .False )
+		If *Var3 != -1
+			If *Var3 == *Var4
+				Set *Var9 .True
+				Exec $Script_MoveTowardsPlayer
+			Else
+				If *Var3 == *Var5
+					Set *Var9 .True
+					Exec $Script_MoveTowardsPlayer
+				EndIf
+			EndIf
+		EndIf
+		If *Var9 == .False
+			Set *MapVar[1] .False
+		EndIf
+		Set *Var9 .False
+		Wait	1
+	EndLoop
+	Return
+	End
+}
+
+% Update Monster direction towards player's pos
+#new:Script $Script_MoveTowardsPlayer
+{
+	Set 	*MapVar[1] .True % Chasing mode
+	Set		*Var1 *MapVar[0]
+	Call	GetAngleToPlayer ( .Npc:Self *Var0 )
+	Switch *Var0
+		Case >= 305`
+			Set	*MapVar[0] 0 % move up
+		Case >= 215`
+			Set	*MapVar[0] 3 % move left
+		Case >= 125`
+			Set	*MapVar[0] 2 % move down
+		Case >= 45`
+			Set	*MapVar[0] 1 % move right
+		Default
+			Set	*MapVar[0] 0 % move up
+	EndSwitch
+	If *Var1 != *MapVar[0] % Monster changed his direction
+		Call	PlaySound ( 209A )
+	EndIf
+	Return
+	End
+}
+
+% Make sure the monster doesn't get stuck moving in the same directions.
+#new:Script $Script_TrackAI
+{
+	Set *VarA .False
+	Loop
+		Set *VarB *MapVar[0] % last direction
+		Wait	1
+		Switch *MapVar[0] % Monster direction
+			CaseOR == 0 % up
+			CaseOR == 2 % down
+				Switch *VarB
+					CaseOR == 1 % right
+					CaseOR == 3 % left
+						Set *VarA .False
+					EndCaseGroup
+				EndSwitch
+			EndCaseGroup
+			CaseOR == 1 % right
+			CaseOR == 3 % left
+				Switch *VarB
+					CaseOR == 0 % up
+					CaseOR == 2 % down
+						Set *VarA .False
+					EndCaseGroup
+				EndSwitch
+			EndCaseGroup
+		EndSwitch
+		Add *VarA 1
+		If *VarA >= 80` % Monster is stuck
+			Switch *MapVar[0] % Monster direction
+				CaseOR == 0 % up
+				CaseOR == 2 % down
+					Call	RandInt ( 1 *Var0 )
+					If *Var0 == 0
+						Set *MapVar[0] 1 % right
+					Else
+						Set *MapVar[0] 3 % left
+					EndIf
+				EndCaseGroup
+				CaseOR == 1 % right
+				CaseOR == 3 % left
+					Call	RandInt ( 1 *Var0 )
+					If *Var0 == 0
+						Set *MapVar[0] 0 % up
+					Else
+						Set *MapVar[0] 2 % down
+					EndIf
+				EndCaseGroup
+			EndSwitch
+			Set *VarA .False
+		EndIf
+	EndLoop
+	Return
+	End
+}
+
+% `Call	$Function_CheckRaycast ( ignoreFlags rayPosX rayPosY rayPosZ rayDirX rayDirY rayDirZ *out_hitObjectID *out_distance )`
+%
+% Used know if the monster should change the direction he is moving.
+#new:Function $Function_CheckRaycast
+{
+	PUSH	R0, R0, R0, R0, R0, R0, R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6, S7, F0
+	COPY	S0, A0
+	% get ignoreFlags
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 0 (A1)
+	COPY	S1, V0
+	% get rayPosX
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 4 (A1)
+	COPY	S2, V0
+	% get rayPosY
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 8 (A1)
+	COPY	S3, V0
+	% get rayPosZ
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, C (A1)
+	COPY	S4, V0
+	% get rayDirX
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 10 (A1)
+	COPY	S5, V0
+	% get rayDirY
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 14 (A1)
+	COPY	S6, V0
+	% get rayDirZ
+	COPY	A0, S0
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 18 (A1)
+	COPY	S7, V0
+	% S1=ignoreFlags
+	% S2-S4=vec3DRayPos
+	% S5=rayDirectionX
+	% S6=rayDirectionY
+	% S7=rayDirectionZ
+	COPY	A0, S1
+	% convert everything to floats
+	MTC1	S2, F0
+	CVT.S.W F0, F0
+	MFC1	A1, F0
+	%
+	MTC1	S3, F0
+	CVT.S.W F0, F0
+	MFC1	A2, F0
+	%
+	MTC1	S4, F0
+	CVT.S.W F0, F0
+	MFC1	A3, F0
+	%
+	MTC1	S5, F0
+	CVT.S.W F0, F0
+	MFC1	S5, F0
+	%
+	MTC1	S6, F0
+	CVT.S.W F0, F0
+	MFC1	S6, F0
+	%
+	MTC1	S7, F0
+	CVT.S.W F0, F0
+	MFC1	S7, F0	
+	SW		S5, 10 (SP) % rayDirectionX
+	SW		S6, 14 (SP) % rayDirectionY
+	SW		S7, 18 (SP) % rayDirectionZ
+	ADDIU	V1, SP, 1C
+	SW		V1, 1C (SP) % *out_hit_x
+	ADDIU	V1, SP, 20
+	SW		V1, 20 (SP) % *out_hit_y
+	ADDIU	V1, SP, 24
+	SW		V1, 24 (SP) % *out_hit_z
+	ADDIU	V1, SP, 28
+	SW		V1, 28 (SP) % *out_depth (distance between the NPC and the collision)
+	ADDIU	V1, SP, 2C
+	SW		V1, 2C (SP) % *out_hit_nx
+	ADDIU	V1, SP, 30
+	SW		V1, 30 (SP) % *out_hit_ny
+	ADDIU	V1, SP, 34
+	JAL		~Func:npc_raycast_general
+	SW		V1, 34 (SP) % *out_hit_nz
+	% save hitObjectID
+	COPY	A0, S0
+	LW		A1, C (A0)
+	LW		A1, 1C (A1)
+	JAL		~Func:set_variable
+	COPY	A2, V0
+	% save distance
+	LW		A2, 28 (SP) % out_depth
+	% convert to int
+	MTC1	A2, F0
+	CVT.W.S F0, F0
+	MFC1	A2, F0
+	COPY	A0, S0
+	LW		A1, C (A0)
+	JAL		~Func:set_variable
+	LW		A1, 20 (A1)
+	POP		R0, R0, R0, R0, R0, R0, R0, R0, R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6, S7, F0
+	JR		RA
+	ORI		V0, R0, 2
+}
+
+% `Call	$GetDist3D ( out_dist X1 Y1 Z1 X2 Y2 Z2 )`
+#new:Function $GetDist3D
+{
+	PUSH	R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6
+	COPY	S0, A0
+	% get arguments
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 4 (A1)
+	COPY	S1, V0
+	%
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 8 (A1)
+	COPY	S2, V0
+	%
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, C (A1)
+	COPY	S3, V0
+	%
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 10 (A1)
+	COPY	S4, V0
+	%
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 14 (A1)
+	COPY	S5, V0
+	%
+	LW		A1, C (S0)
+	JAL		~Func:get_variable
+	LW		A1, 18 (A1)
+	COPY	S6, V0
+	%
+	MTC1	S1, F12
+	CVT.S.W F12, F12
+	MTC1	S2, F14
+	CVT.S.W F14, F14
+	MTC1	S3, F0
+	CVT.S.W F0, F0
+	MFC1	A2, F0
+	%
+	MTC1	S4, F0
+	CVT.S.W F0, F0
+	MFC1	A3, F0
+	MTC1	S5, F0
+	CVT.S.W F0, F0
+	SWC1	F0, 10 (SP)
+	MTC1	S6, F0
+	CVT.S.W F0, F0
+	JAL		~Func:dist3D
+	SWC1	F0, 14 (SP)
+	CVT.W.S F0, F0
+	% save var
+	COPY	A0, S0
+	LW		A1, C (A0)
+	MFC1	A2, F0
+	JAL		~Func:set_variable
+	LW		A1, 0 (A1)
+	POP		R0, R0, RA, A0, A1, A2, A3, V0, V1, S0, S1, S2, S3, S4, S5, S6
+	JR		RA
+	ORI		V0, R0, 2
+}
+
+% `Call	$Function_UpdateMonsterDirection ( colliderFlags )`
+%
+% Update `MapVar0`.
+#new:Function $Function_UpdateMonsterDirection
+{
+	PUSH	RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+	COPY	S0, A0
+	LW		A1, C (A0)
+	JAL		~Func:get_variable
+	LW		A1, 0 (A1)
+	COPY	S1, V0
+	COPY	A0, S0
+	LIO		A1, *MapVar[0]
+	JAL		~Func:get_variable
+	RESERVED
+	COPY	S2, V0
+	.GetNewDirection
+	JAL		~Func:rand_int
+	ORI		A0, R0, 3
+	% check if direction is possible
+	BNE		V0, R0, .CheckRight
+	ORI		A1, R0, 1
+	LUI		A2, 0100 % up
+	AND		A2, S1, A2
+	BEQ		A2, R0, .GetNewDirection
+	NOP
+	% make sure this possition isn't the opossite direction as the current one.
+	ORI		A0, R0, 2
+	BEQ		S2, A0, .GetNewDirection
+	NOP
+	BEQ		R0, R0, .UpdateMapVar
+	NOP
+	.CheckRight
+	BNE		V0, A1, .CheckDown
+	ORI		A1, R0, 2
+	LUI		A2, 0200 % right
+	AND		A2, S1, A2
+	BEQ		A2, R0, .GetNewDirection
+	NOP
+	% make sure this possition isn't the opossite direction as the current one.
+	ORI		A0, R0, 3
+	BEQ		S2, A0, .GetNewDirection
+	NOP
+	BEQ		R0, R0, .UpdateMapVar
+	NOP
+	.CheckDown
+	BNE		V0, A1, .CheckLeft
+	ORI		A1, R0, 3
+	LUI		A2, 0400 % down
+	AND		A2, S1, A2
+	BEQ		A2, R0, .GetNewDirection
+	NOP
+	% make sure this possition isn't the opossite direction as the current one.
+	BEQ		S2, R0, .GetNewDirection
+	NOP
+	BEQ		R0, R0, .UpdateMapVar
+	NOP
+	.CheckLeft
+	LUI		A2, 0800 % left
+	AND		A2, S1, A2
+	BEQ		A2, R0, .GetNewDirection
+	NOP
+	% make sure this possition isn't the opossite direction as the current one.
+	ORI		A0, R0, 1
+	BEQ		S2, A0, .GetNewDirection
+	NOP
+	.UpdateMapVar
+	COPY	A0, S0
+	LIO		A1, *MapVar[0]
+	JAL		~Func:set_variable
+	COPY	A2, V0
+	POP		RA, A0, A1, A2, A3, V0, V1, S0, S1, S2
+	JR		RA
+	ORI		V0, R0, 2
+}
+
+% Spawn new enemies and the exit
+#new:Script $Script_SpawnEnemies
+{
+	Wait	10`
+	Loop
+		ExecWait $Script_GetClones
+		If *Var0 < 3
+			% Spawn a new clone
+			Call GetNpcPos ( .Npc:Clone1 .False *Var1 .False )
+			If *Var1 <= -1000`
+				Set *Var3 .Npc:Clone1
+				Wait 1
+				Goto SpawnClone
+			EndIf
+			Call GetNpcPos ( .Npc:Clone2 .False *Var1 .False )
+			If *Var1 <= -1000`
+				Set *Var3 .Npc:Clone2
+				Wait 1
+				Goto SpawnClone
+			EndIf
+			Set *Var3 .Npc:Clone3
+			Label 	SpawnClone
+			Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+			Call	SetNpcPos ( *Var3 *Var0 *Var1 *Var2 )
+			% update AI data
+			Call	GetNpcPointer ( *Var3 *Var4 )
+			Sub		*Var4 100 % read NPC's data from NpcGroupData
+			Call 	$ReadAddress ( *Var4 2 *Var4 D0 .False ) % movementData
+			% update detection data
+			Call 	$WriteAddress ( *Var4 2 *Var0 0 .False ) % X
+			Call 	$WriteAddress ( *Var4 2 *Var1 4 .False ) % Y
+			Call 	$WriteAddress ( *Var4 2 *Var2 8 .False ) % Z
+			% update wandering data
+			Call 	$WriteAddress ( *Var4 2 *Var0 1C .False ) % X
+			Call 	$WriteAddress ( *Var4 2 *Var1 20 .False ) % Y
+			Call 	$WriteAddress ( *Var4 2 *Var2 24 .False ) % Z
+			Call 	$WriteAddress ( *Var4 2 120` 28 .False ) % detection volume - sizeX
+			Call 	$WriteAddress ( *Var4 2 130` 2C .False ) % detection volume - sizeZ
+			Call    SetNpcFlagBits ( *Var3 00000200 .True ) % enable npc's gravity
+			Call	EnableNpcAI ( .Npc:Self .True )
+			Add 	*MapVar[3] 1
+		EndIf
+		Call	RandInt ( 10` *Var0 )
+		Set		*Var1 40`
+		Sub		*Var1 *Var0
+		WaitSeconds	 *Var1
+		% Spawn Light
+		Call	GetNpcPos ( .Npc:Light *Var0 *Var1 *Var2 )
+		If *Var1 <= -1000` % light hasn't been spawned
+			If *MapVar[3] >= 3 % Check if at least 3 clones has been spawned.
+				Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+				Call	SetNpcPos ( .Npc:Light *Var0 *Var1 *Var2 )
+				Call	RandInt ( 10` *Var0 )
+				Set		*Var1 40`
+				Sub		*Var1 *Var0
+				WaitSeconds	 *Var1
+			EndIf
+		EndIf
+	EndLoop
+	Return
+	End
+}
+
+% get amount of clones already spawned
+%
+% returns amount in `Var0`
+%
+% `[!] Writes in Var1`
+#new:Script $Script_GetClones
+{
+	Set *Var0 .False
+	Call GetNpcPos ( .Npc:Clone1 .False *Var1 .False )
+	If *Var1 > -1000`
+		Add *Var0 1
+	EndIf
+	Call GetNpcPos ( .Npc:Clone2 .False *Var1 .False )
+	If *Var1 > -1000`
+		Add *Var0 1
+	EndIf
+	Call GetNpcPos ( .Npc:Clone3 .False *Var1 .False )
+	If *Var1 > -1000`
+		Add *Var0 1
+	EndIf
+	Return
+	End
+}
+
+%==========
+% Light
+%==========
+
+#new:Script $NpcScript_Init_Light
+{
+	/% testing
+	Call	GetPlayerPos ( *Var0 *Var1 *Var2 )
+	Add		*Var2 50` % z
+	Call	SetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )%/
+	Call	SetNpcFlagBits ( .Npc:Self 00040000 .True ) % don't look towards the player, when he is close.
+	Call	SetNpcAnimationSpeed ( .Npc:Self *Fixed[5.0] )
+	Call	EnableNpcShadow ( .Npc:Self .False )
+	Call	SetNpcScale ( .Npc:Self *Fixed[0.5] *Fixed[0.5] *Fixed[0.5] )
+	Call	BindNpcIdle ( .Npc:Self $Script_Light_Idle )
+	Call	BindNpcInteract ( .Npc:Self $Script_ExitMap )
+	Return
+	End
+}
+
+#new:Script $Script_ExitMap
+{
+	SetGroup 0
+	SuspendAll 2
+	Exec $Script_HideAllEnemies
+	Call DisablePlayerInput ( .True )
+	% fade light
+	Thread
+		SetF *Var1 *Fixed[240.0] 
+		Loop 30` 
+			SubF *Var1 *Fixed[8.0] 
+			Call 802CFD30 ( .Npc:Self 7 *Var1 0 0 0 )
+			Wait 1 
+		EndLoop
+	EndThread
+	Wait 10`
+	Call ShowMessageAtScreenPos ( $String_Safe A0 28 )
+	Call SetNpcPos ( .Npc:Self 0 -1000` 0 )
+	Exec $Script_TurnScreenRed
+	Call DisablePlayerInput ( .False )
+	Return
+	End
+}
+
+#new:Script $Script_HideAllEnemies
+{
+	Set	*MapVar[4] .True % disable enemies
+	Call SetNpcPos ( .Npc:Monster 0 -1000` 0 )
+	Call SetNpcPos ( .Npc:Clone1 0 -1000` 0 )
+	Call SetNpcPos ( .Npc:Clone2 0 -1000` 0 )
+	Call SetNpcPos ( .Npc:Clone3 0 -1000` 0 )
+	Return
+	End
+}
+
+#new:Script $Script_TurnScreenRed
+{
+	%Call 	$WriteAddress ( 8015C790 2 00000000 .False .False ) % Set fade color as Black
+	Call 	$WriteAddress ( 8015C790 2 FF000000 .False .False ) % Set fade color as red
+	SetF	*Var[0] *Fixed[0.5]  % speed
+	SetF	*Var[1] *Fixed[255.0] % fully dark
+	ExecWait $Script_FadeScreenOut
+	Call	GotoMap ( "tes_02" 0 )
+	Return
+	End
+}
+
+#string $String_Safe
+{
+[Style Inspect]
+You're safe...[Pause:14] for now[Pause:14]
+[Wait][End]
+}
+
+#new:Script $Script_Light_Idle
+{
+	Loop
+		Call	GetNpcPos ( .Npc:Self *Var0 *Var1 *Var2 )
+		If *Var1 > -1000` % light has been spawned
+			%Call	PlaySoundAtNpc ( .Npc:Self 0000 00000000 )
+			Call	GetPlayerPos ( *Var1 *Var2 *Var3 )
+			Call	GetNpcPos ( .Npc:Self *Var4 *Var5 *Var6 )
+			Call	$GetDist3D ( *Var0 *Var1 *Var2 *Var3 *Var4 *Var5 *Var6 )
+			Switch *Var0 % adjust volume
+				Case >= 1000`
+					Set *Var7 .False
+					Set *Var8 15`
+				Case > 900`
+					Set *Var7 10`
+					Set *Var8 14`
+				Case > 800`
+					Set *Var7 20`
+					Set *Var8 13`
+				Case > 700`
+					Set *Var7 30`
+					Set *Var8 12`
+				Case > 600`
+					Set *Var7 35`
+					Set *Var8 11`
+				Case > 500`
+					Set *Var7 40`
+					Set *Var8 10`
+				Case > 400`
+					Set *Var7 45`
+					Set *Var8 9
+				Case > 300`
+					Set *Var7 50`
+					Set *Var8 8
+				Case > 200`
+					Set *Var7 55`
+					Set *Var8 7
+				Case > 110`
+					Set *Var7 60`
+					Set *Var8 6
+				Case > 0
+					Set *Var7 70`
+					Set *Var8 5
+			EndSwitch
+			If *Var7 > 0
+				Call	PlaySoundWithVolume ( 0063 *Var7 )
+			EndIf
+		Else
+			Set *Var8 1
+		EndIf
+		Wait	*Var8
+	EndLoop
+	Return
+	End
+}
+
+% Player Hurt
+
+#new:Script $NpcScript_Init_PlayerHurt
+{
+	Call	SetNpcFlagBits ( .Npc:Self 84008100 .True ) % misc flags
+	Call	SetNpcFlagBits ( .Npc:Self 00000840 .False ) % don't ignore collisions while moving
+	Return
+	End
+}

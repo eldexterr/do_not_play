@@ -1,0 +1,17 @@
+% Disable jump sfx
+@Function E2417C % 802B613C
+{
+    NOP
+}
+
+% Disable dash sfx
+@Function E25F58 % 802B61F8
+{
+    NOP
+}
+
+/% Disable land sfx
+@Function 800E32CC
+{
+    NOP
+}%/

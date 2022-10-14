@@ -1,0 +1,22 @@
+% Make possible to start the game without needing to load a save file.
+% Star Rod's `Quick Launch` option needs to be checked.
+
+% This file work along with `globals/system/QuickLaunch.patch`
+
+% Start the game at this map
+%
+% From ~Func:state_step_enter_world
+@Hook 80035F98
+{
+    ORI     A0, R0, 1C % areaID
+    ORI     A1, R0, 1 % mapID
+    CLEAR   A3 % entryID
+    LIO     V0, 80074024 % gameStatus
+    SH      A0, 86 (V0)
+    SH      A1, 8C (V0)
+    SH      A3, 8E (V0)
+    JAL     ~Func:load_map_by_IDs
+    CLEAR   A2
+    J       80035FA0
+    NOP
+}
